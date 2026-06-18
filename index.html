@@ -1,134 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScreamPhone Ultimate Fixed</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #111111;
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            text-align: center;
-        }
-        .container { padding: 30px; max-width: 400px; width: 85%; }
-        h1 { font-size: 2.5rem; margin-bottom: 5px; color: #ffcc00; }
-        p { color: #888888; margin-bottom: 35px; }
-        .action-btn {
-            width: 100%;
-            padding: 18px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border-radius: 50px;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3);
-            background: #ffcc00; 
-            color: #000000;
-        }
-        .btn-armed { background: #dc3545 !important; color: #ffffff !important; }
-        .status-panel {
-            margin-top: 30px;
-            padding: 20px;
-            background: #1c1c1e;
-            border-radius: 16px;
-        }
-        .value { font-size: 1.3rem; font-weight: bold; color: #00ffcc; }
-        .falling { color: #ff3366; }
-    </style>
-</head>
-<body>
+<script>
+    const mainBtn = document.getElementById('mainBtn');
+    const statusDisplay = document.getElementById('statusDisplay');
+    const screamAudio = document.getElementById('screamAudio');
 
-    <div class="container">
-        <h1>ScreamPhone 📱🔥</h1>
-        <p>This version uses media streams to force sound past your phone's silent switch.</p>
-        
-        <button id="mainBtn" class="action-btn">START & ARM DEVICE</button>
+    let isArmed = false;
+    let isScreaming = false;
 
-        <div class="status-panel">
-            <div id="statusDisplay" class="value">OFFLINE (TAP START)</div>
-        </div>
-    </div>
+    mainBtn.addEventListener('click', async () => {
+        // FORCE AUDIO UNLOCK: We play and immediately pause. 
+        // This tricks the phone's security sandbox into unlocking the audio stream.
+        screamAudio.play();
+        screamAudio.pause();
+        screamAudio.currentTime = 0;
 
-    <audio id="screamAudio" crossorigin="anonymous" preload="auto">
-        <source src="https://actions.google.com/sounds/v1/human/human_scream_short.ogg" type="audio/ogg">
-        <source src="https://assets.mixkit.co/active_storage/sfx/1005/1005-84.wav" type="audio/wav">
-    </audio>
-
-    <script>
-        const mainBtn = document.getElementById('mainBtn');
-        const statusDisplay = document.getElementById('statusDisplay');
-        const screamAudio = document.getElementById('screamAudio');
-
-        let isArmed = false;
-        let isScreaming = false;
-
-        mainBtn.addEventListener('click', async () => {
-            // Unlocks the media player immediately inside the user click loop
-            screamAudio.play().then(() => {
-                screamAudio.pause();
-                screamAudio.currentTime = 0;
-            }).catch(e => console.log("Audio unlock:", e));
-
-            // Request hardware sensor permission
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const permissionState = await DeviceMotionEvent.requestPermission();
-                    if (permissionState === 'granted') {
-                        activateTracking();
-                    } else {
-                        statusDisplay.innerText = "PERMISSION DENIED";
-                    }
-                } catch (error) {
-                    statusDisplay.innerText = "ERROR LOADING HARDWARE";
+        // Request hardware sensor permission
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            try {
+                const permissionState = await DeviceMotionEvent.requestPermission();
+                if (permissionState === 'granted') {
+                    activateTracking();
+                } else {
+                    statusDisplay.innerText = "PERMISSION DENIED";
                 }
-            } else {
-                activateTracking(); // Android or Desktop engines
+            } catch (error) {
+                statusDisplay.innerText = "ERROR LOADING HARDWARE";
+            }
+        } else {
+            activateTracking(); // Android
+        }
+    });
+
+    function activateTracking() {
+        if (isArmed) return;
+        isArmed = true;
+
+        mainBtn.innerText = "🚨 SYSTEM LIVE (TOSS NOW)";
+        mainBtn.className = "action-btn btn-armed";
+        statusDisplay.innerText = "MONITORING FOR DROP...";
+
+        window.addEventListener('devicemotion', (event) => {
+            let acc = event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            let x = acc.x || 0;
+            let y = acc.y || 0;
+            let z = acc.z || 0;
+            
+            let gForce = Math.sqrt(x * x + y * y + z * z) / 9.8;
+
+            if (gForce < 0.4 && !isScreaming) {
+                isScreaming = true;
+                statusDisplay.innerText = "🔥 FREE FALL DETECTED !!!";
+                statusDisplay.className = "value falling";
+                
+                // Force play
+                screamAudio.currentTime = 0;
+                let playPromise = screamAudio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        // If it fails, alert the exact error to the screen so we can see it
+                        statusDisplay.innerText = "AUDIO BLOCKED: " + error.message;
+                    });
+                }
+            } 
+            else if (gForce > 0.85 && isScreaming) {
+                isScreaming = false;
+                statusDisplay.innerText = "✅ STABILIZED";
+                statusDisplay.className = "value";
+                screamAudio.pause();
             }
         });
-
-        function activateTracking() {
-            if (isArmed) return;
-            isArmed = true;
-
-            mainBtn.innerText = "🚨 SYSTEM LIVE (TOSS NOW)";
-            mainBtn.className = "action-btn btn-armed";
-            statusDisplay.innerText = "MONITORING FOR DROP...";
-
-            window.addEventListener('devicemotion', (event) => {
-                let acc = event.accelerationIncludingGravity;
-                if (!acc) return;
-
-                let x = acc.x || 0;
-                let y = acc.y || 0;
-                let z = acc.z || 0;
-                
-                let gForce = Math.sqrt(x * x + y * y + z * z) / 9.8;
-
-                // Free-fall detection trigger
-                if (gForce < 0.4 && !isScreaming) {
-                    isScreaming = true;
-                    statusDisplay.innerText = "🔥 FREE FALL DETECTED !!!";
-                    statusDisplay.className = "value falling";
-                    screamAudio.currentTime = 0;
-                    screamAudio.play().catch(err => alert("Playback error: " + err));
-                } 
-                // Return to static resting threshold
-                else if (gForce > 0.85 && isScreaming) {
-                    isScreaming = false;
-                    statusDisplay.innerText = "✅ STABILIZED";
-                    statusDisplay.className = "value";
-                    screamAudio.pause();
-                }
-            });
-        }
-    </script>
-</body>
-</html>
+    }
+</script>
