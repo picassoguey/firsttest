@@ -43,7 +43,7 @@
             font-size: 1rem;
             border-radius: 10px;
             margin-top: 20px;
-            width: 200px;
+            width: 230px;
         }
         .status {
             margin-top: 30px;
@@ -66,7 +66,7 @@
         <br>
         <select id="soundSelect">
             <option value="doh">Homer Simpson ("D'oh!")</option>
-            <option value="scream">Classic Human Scream</option>
+            <option value="scream">Classic Scream (MP3)</option>
         </select>
 
         <div id="statusDisplay" class="status safe">System: Disarmed</div>
@@ -80,15 +80,23 @@
         let isArmed = false;
         let isScreaming = false;
 
-        // Using public, reliable open-source audio URLs for immediate testing
+        // Using reliable cross-platform open MP3 sources
         const sounds = {
-            doh: new Audio('https://www.soundboard.com/handler/DownLoadTrack.ashx?cliptrackid=247209'), 
-            scream: new Audio('https://actions.google.com/sounds/v1/human/male_scream.ogg')
+            doh: new Audio('https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg'), // Backup sound placeholder 
+            scream: new Audio('https://actions.google.com/sounds/v1/human/human_scream_short.ogg') 
         };
+        
+        // Force alternative highly stable MP3 direct URLs for iOS/Android stability
+        sounds.doh.src = 'https://assets.mixkit.co/active_storage/sfx/2192/2192-84.wav'; // Clean crisp cartoon impact sound
+        sounds.scream.src = 'https://assets.mixkit.co/active_storage/sfx/1005/1005-84.wav'; // Universal high-quality scream track
 
         startBtn.addEventListener('click', async () => {
-            // iOS 13+ requires explicit permission request for device motion sensors
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+            // Wake up audio context early to bypass aggressive mobile silent-mode restrictions
+            sounds.doh.play().then(() => { sounds.doh.pause(); sounds.doh.currentTime = 0; });
+            sounds.scream.play().then(() => { sounds.scream.pause(); sounds.scream.currentTime = 0; });
+
+            // Request hardware sensor alignment
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceMotionEvent.requestPermission();
                     if (permissionState === 'granted') {
@@ -100,7 +108,6 @@
                     console.error(error);
                 }
             } else {
-                // Non-iOS devices
                 initMotionTracking();
             }
         });
@@ -117,15 +124,13 @@
                 let acc = event.accelerationIncludingGravity;
                 if (!acc) return;
 
-                // Calculate total G-forces acting on the phone
                 let gForce = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z) / 9.8;
 
-                // In true free-fall (a drop), total net forces drop close to zero.
-                if (gForce < 0.3 && !isScreaming) {
+                // Threshold logic for weightlessness tracking
+                if (gForce < 0.4 && !isScreaming) {
                     triggerSound();
                 } 
-                // Once it hits the couch/mattress, G-forces spike back up, stopping the sound
-                else if (gForce > 0.8 && isScreaming) {
+                else if (gForce > 0.85 && isScreaming) {
                     stopSound();
                 }
             });
@@ -138,7 +143,8 @@
             
             let selectedSound = soundSelect.value;
             sounds[selectedSound].currentTime = 0;
-            sounds[selectedSound].play().catch(e => console.log("Audio play blocked until user interacts"));
+            sounds[selectedSound].volume = 1.0;
+            sounds[selectedSound].play().catch(e => console.log("Playback error:", e));
         }
 
         function stopSound() {
