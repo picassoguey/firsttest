@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScreamPhone</title>
+    <title>ScreamPhone Ultimate Cross-Platform</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background: #121212;
+            background: #111111;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
@@ -17,141 +17,159 @@
             justify-content: center;
             height: 100vh;
             text-align: center;
-            overflow: hidden;
         }
-        .container { padding: 20px; }
-        h1 { font-size: 2.5rem; margin-bottom: 10px; color: #ffcc00; }
-        p { color: #aaaaaa; font-size: 1.1rem; margin-bottom: 30px; }
-        .btn {
-            background: #ffcc00;
-            color: #000000;
-            border: none;
-            padding: 15px 40px;
+        .container { padding: 30px; max-width: 400px; width: 85%; }
+        h1 { font-size: 2.5rem; margin-bottom: 5px; color: #ffcc00; }
+        .subtitle { color: #888888; font-size: 0.95rem; margin-bottom: 35px; }
+        .action-btn {
+            width: 100%;
+            padding: 18px;
             font-size: 1.2rem;
             font-weight: bold;
             border-radius: 50px;
+            border: none;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4);
-            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3);
+            transition: transform 0.1s, background 0.2s;
         }
-        .btn:active { transform: scale(0.95); }
-        select {
-            background: #222;
-            color: white;
-            border: 2px solid #ffcc00;
-            padding: 10px 20px;
-            font-size: 1rem;
-            border-radius: 10px;
-            margin-top: 20px;
-            width: 230px;
-        }
-        .status {
+        .action-btn:active { transform: scale(0.97); }
+        .btn-setup { background: #ffcc00; color: #000000; }
+        .btn-armed { background: #dc3545; color: #ffffff; box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4); }
+        .status-panel {
             margin-top: 30px;
-            font-weight: bold;
-            font-size: 1.3rem;
-            text-transform: uppercase;
+            padding: 20px;
+            background: #1c1c1e;
+            border-radius: 16px;
+            border: 1px solid #2c2c2e;
         }
+        .label { font-size: 0.8rem; color: #666666; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 1.3rem; font-weight: bold; margin-top: 5px; }
         .safe { color: #00ffcc; }
-        .falling { color: #ff3366; animation: blink 0.2s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .falling { color: #ff3366; animation: flash 0.2s infinite; }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
 
     <div class="container">
         <h1>ScreamPhone 📱🔥</h1>
-        <p>Arm the app, select a sound, and toss your phone onto a cushion.</p>
+        <div class="subtitle">Universal Multi-Browser Edition</div>
         
-        <button class="btn" id="startBtn">1. ARM APP (ACTIVATE SENSORS)</button>
-        <br>
-        <select id="soundSelect">
-            <option value="doh">Homer Simpson ("D'oh!")</option>
-            <option value="scream">Classic Scream (MP3)</option>
-        </select>
+        <button id="mainBtn" class="action-btn btn-setup">START & ARM DEVICE</button>
 
-        <div id="statusDisplay" class="status safe">System: Disarmed</div>
+        <div class="status-panel">
+            <div class="label">System Engine Tracker</div>
+            <div id="statusDisplay" class="value safe">OFFLINE (TAP START)</div>
+        </div>
     </div>
 
     <script>
-        const startBtn = document.getElementById('startBtn');
-        const soundSelect = document.getElementById('soundSelect');
+        const mainBtn = document.getElementById('mainBtn');
         const statusDisplay = document.getElementById('statusDisplay');
-        
+
+        let audioCtx = null;
         let isArmed = false;
         let isScreaming = false;
+        let synthOscillator = null;
 
-        // Using reliable cross-platform open MP3 sources
-        const sounds = {
-            doh: new Audio('https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg'), // Backup sound placeholder 
-            scream: new Audio('https://actions.google.com/sounds/v1/human/human_scream_short.ogg') 
-        };
-        
-        // Force alternative highly stable MP3 direct URLs for iOS/Android stability
-        sounds.doh.src = 'https://assets.mixkit.co/active_storage/sfx/2192/2192-84.wav'; // Clean crisp cartoon impact sound
-        sounds.scream.src = 'https://assets.mixkit.co/active_storage/sfx/1005/1005-84.wav'; // Universal high-quality scream track
+        mainBtn.addEventListener('click', async () => {
+            // 1. Cross-Platform Audio Context Initialization
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                } else {
+                    alert("Your browser engine does not support native audio synthesis.");
+                    return;
+                }
+            }
+            
+            // Bypass security restrictions across Safari and Chrome
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
 
-        startBtn.addEventListener('click', async () => {
-            // Wake up audio context early to bypass aggressive mobile silent-mode restrictions
-            sounds.doh.play().then(() => { sounds.doh.pause(); sounds.doh.currentTime = 0; });
-            sounds.scream.play().then(() => { sounds.scream.pause(); sounds.scream.currentTime = 0; });
+            // Fire a quick, gentle startup audio confirmation chirp
+            playSystemChirp();
 
-            // Request hardware sensor alignment
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            // 2. Multi-Browser Motion Permission Branching Architecture
+            const requiresiOSPermission = typeof DeviceMotionEvent !== 'undefined' && 
+                                          typeof DeviceMotionEvent.requestPermission === 'function';
+
+            if (requiresiOSPermission) {
+                // iOS Pipeline
                 try {
                     const permissionState = await DeviceMotionEvent.requestPermission();
                     if (permissionState === 'granted') {
-                        initMotionTracking();
+                        activateTrackingSystem();
                     } else {
-                        alert('Sensor access denied. Cannot detect drops!');
+                        statusDisplay.innerText = "ERROR: PERMISSION DENIED";
+                        statusDisplay.style.color = "#ff3366";
                     }
                 } catch (error) {
-                    console.error(error);
+                    console.error("iOS sensor fallback triggered:", error);
+                    statusDisplay.innerText = "ERROR LOADING HARDWARE";
                 }
             } else {
-                initMotionTracking();
+                // Android, Desktop, or Older Mobile Engine Pipeline (No permission request required)
+                if (typeof DeviceMotionEvent !== 'undefined') {
+                    activateTrackingSystem();
+                } else {
+                    alert("This device is missing physical accelerometer tracking sensors.");
+                }
             }
         });
 
-        function initMotionTracking() {
+        function playSystemChirp() {
+            try {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime); 
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch(e) { console.log("Audio confirmation bypass:", e); }
+        }
+
+        function activateTrackingSystem() {
             if (isArmed) return;
             isArmed = true;
-            startBtn.innerText = "🚨 APP IS LIVE & ARMED";
-            startBtn.style.background = "#ff3366";
-            startBtn.style.boxShadow = "0 4px 15px rgba(255, 51, 102, 0.4)";
-            statusDisplay.innerText = "System: Monitoring Gravity";
 
-            window.addEventListener('devicemotion', (event) => {
-                let acc = event.accelerationIncludingGravity;
-                if (!acc) return;
+            // UI System Upgrades
+            mainBtn.innerText = "🚨 TRACKING SYSTEM LIVE";
+            mainBtn.className = "action-btn btn-armed";
+            statusDisplay.innerText = "MONITORING ACCELERATION";
+            statusDisplay.className = "value safe";
 
-                let gForce = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z) / 9.8;
-
-                // Threshold logic for weightlessness tracking
-                if (gForce < 0.4 && !isScreaming) {
-                    triggerSound();
-                } 
-                else if (gForce > 0.85 && isScreaming) {
-                    stopSound();
-                }
-            });
+            // Universal event listener injection
+            window.addEventListener('devicemotion', handleMotionMetrics, true);
         }
 
-        function triggerSound() {
-            isScreaming = true;
-            statusDisplay.innerText = "🔥 FREE FALL DETECTED!!!";
-            statusDisplay.className = "status falling";
+        function handleMotionMetrics(event) {
+            let acc = event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            // Compute precise vector length scalar across x, y, z metrics
+            let x = acc.x || 0;
+            let y = acc.y || 0;
+            let z = acc.z || 0;
             
-            let selectedSound = soundSelect.value;
-            sounds[selectedSound].currentTime = 0;
-            sounds[selectedSound].volume = 1.0;
-            sounds[selectedSound].play().catch(e => console.log("Playback error:", e));
+            let gForce = Math.sqrt(x * x + y * y + z * z) / 9.8;
+
+            // Dynamic normalization check for devices that flip orientation tracking matrices
+            if (gForce < 0.35 && !isScreaming) {
+                triggerSiren();
+            } 
+            else if (gForce > 0.85 && isScreaming) {
+                killSiren();
+            }
         }
 
-        function stopSound() {
-            isScreaming = false;
-            statusDisplay.innerText = "💥 IMPACT DETECTED / SAFE";
-            statusDisplay.className = "status safe";
-        }
-    </script>
-</body>
-</html>
+        function triggerSiren() {
+            if (isScreaming || !audioCtx) return;
+            isScreaming = true;
+            status
