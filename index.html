@@ -1,75 +1,141 @@
-<script>
-    const mainBtn = document.getElementById('mainBtn');
-    const statusDisplay = document.getElementById('statusDisplay');
-    const screamAudio = document.getElementById('screamAudio');
-
-    let isArmed = false;
-    let isScreaming = false;
-
-    mainBtn.addEventListener('click', async () => {
-        // FORCE AUDIO UNLOCK: We play and immediately pause. 
-        // This tricks the phone's security sandbox into unlocking the audio stream.
-        screamAudio.play();
-        screamAudio.pause();
-        screamAudio.currentTime = 0;
-
-        // Request hardware sensor permission
-        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-            try {
-                const permissionState = await DeviceMotionEvent.requestPermission();
-                if (permissionState === 'granted') {
-                    activateTracking();
-                } else {
-                    statusDisplay.innerText = "PERMISSION DENIED";
-                }
-            } catch (error) {
-                statusDisplay.innerText = "ERROR LOADING HARDWARE";
-            }
-        } else {
-            activateTracking(); // Android
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreamPhone Android Fix</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111111;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
         }
-    });
+        .container { padding: 30px; max-width: 400px; width: 85%; }
+        h1 { font-size: 2.5rem; color: #ffcc00; margin-bottom: 5px; }
+        p { color: #888888; margin-bottom: 35px; }
+        .action-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            border: none;
+            background: #ffcc00;
+            color: #000000;
+            cursor: pointer;
+        }
+        .btn-armed { background: #dc3545 !important; color: #ffffff !important; }
+        .status-panel {
+            margin-top: 30px;
+            padding: 20px;
+            background: #1c1c1e;
+            border-radius: 16px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #00ffcc;
+        }
+        .falling { color: #ff3366; }
+    </style>
+</head>
+<body>
 
-    function activateTracking() {
-        if (isArmed) return;
-        isArmed = true;
+    <div class="container">
+        <h1>ScreamPhone 📱🤖</h1>
+        <p>Android Special Edition. Bypasses external network security blocks.</p>
+        
+        <button id="mainBtn" class="action-btn">ARM AND SECURE DEVICE</button>
 
-        mainBtn.innerText = "🚨 SYSTEM LIVE (TOSS NOW)";
-        mainBtn.className = "action-btn btn-armed";
-        statusDisplay.innerText = "MONITORING FOR DROP...";
+        <div class="status-panel">
+            <div id="statusDisplay">OFFLINE (TAP TO ARM)</div>
+        </div>
+    </div>
 
-        window.addEventListener('devicemotion', (event) => {
-            let acc = event.accelerationIncludingGravity;
-            if (!acc) return;
+    <script>
+        const mainBtn = document.getElementById('mainBtn');
+        const statusDisplay = document.getElementById('statusDisplay');
 
-            let x = acc.x || 0;
-            let y = acc.y || 0;
-            let z = acc.z || 0;
-            
-            let gForce = Math.sqrt(x * x + y * y + z * z) / 9.8;
+        let isArmed = false;
+        let isScreaming = false;
+        let audioCtx = null;
+        let alarmOscillator = null;
 
-            if (gForce < 0.4 && !isScreaming) {
-                isScreaming = true;
-                statusDisplay.innerText = "🔥 FREE FALL DETECTED !!!";
-                statusDisplay.className = "value falling";
-                
-                // Force play
-                screamAudio.currentTime = 0;
-                let playPromise = screamAudio.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        // If it fails, alert the exact error to the screen so we can see it
-                        statusDisplay.innerText = "AUDIO BLOCKED: " + error.message;
-                    });
-                }
-            } 
-            else if (gForce > 0.85 && isScreaming) {
-                isScreaming = false;
-                statusDisplay.innerText = "✅ STABILIZED";
-                statusDisplay.className = "value";
-                screamAudio.pause();
+        mainBtn.addEventListener('click', () => {
+            // Android Chrome requires an active hardware sound handshake on tap
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
+            
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            // Play a quick 0.1 second confirmation chirp to prove speakers work instantly
+            let testOsc = audioCtx.createOscillator();
+            testOsc.connect(audioCtx.destination);
+            testOsc.start();
+            testOsc.stop(audioCtx.currentTime + 0.1);
+
+            // Change UI layout
+            isArmed = true;
+            mainBtn.innerText = "🚨 SYSTEM ACTIVE (TOSS ON BED)";
+            mainBtn.className = "action-btn btn-armed";
+            statusDisplay.innerText = "ACCELEROMETER ARMED";
+
+            // Listen to Android hardware sensor feed
+            window.addEventListener('devicemotion', (event) => {
+                let acc = event.accelerationIncludingGravity;
+                if (!acc) return;
+
+                let x = acc.x || 0;
+                let y = acc.y || 0;
+                let z = acc.z || 0;
+                
+                let gForce = Math.sqrt(x * x + y * y + z * z) / 9.8;
+
+                // Android Free Fall threshold (weightlessness check)
+                if (gForce < 0.4 && !isScreaming) {
+                    isScreaming = true;
+                    statusDisplay.innerText = "🔥 FREE FALL DETECTED !!!";
+                    statusDisplay.className = "falling";
+                    
+                    // Hardware synthesized alarm generation
+                    alarmOscillator = audioCtx.createOscillator();
+                    let gainNode = audioCtx.createGain();
+                    
+                    alarmOscillator.type = 'sawtooth'; // Heavy, loud retro synth tone
+                    alarmOscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    // Rapid slide downwards creates a classic falling laser effect
+                    alarmOscillator.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.6);
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    alarmOscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    
+                    alarmOscillator.start();
+                } 
+                // Landing impact check
+                else if (gForce > 0.85 && isScreaming) {
+                    isScreaming = false;
+                    statusDisplay.innerText = "✅ POSITION STABILIZED";
+                    statusDisplay.className = "";
+                    
+                    if (alarmOscillator) {
+                        try {
+                            alarmOscillator.stop();
+                        } catch(e) {}
+                        alarmOscillator = null;
+                    }
+                }
+            });
         });
-    }
-</script>
+    </script>
+</body>
+</html>
