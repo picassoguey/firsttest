@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreamPhone</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+        .container { padding: 20px; }
+        h1 { font-size: 2.5rem; margin-bottom: 10px; color: #ffcc00; }
+        p { color: #aaaaaa; font-size: 1.1rem; margin-bottom: 30px; }
+        .btn {
+            background: #ffcc00;
+            color: #000000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4);
+            transition: transform 0.2s;
+        }
+        .btn:active { transform: scale(0.95); }
+        select {
+            background: #222;
+            color: white;
+            border: 2px solid #ffcc00;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 10px;
+            margin-top: 20px;
+            width: 200px;
+        }
+        .status {
+            margin-top: 30px;
+            font-weight: bold;
+            font-size: 1.3rem;
+            text-transform: uppercase;
+        }
+        .safe { color: #00ffcc; }
+        .falling { color: #ff3366; animation: blink 0.2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>ScreamPhone 📱🔥</h1>
+        <p>Arm the app, select a sound, and toss your phone onto a cushion.</p>
+        
+        <button class="btn" id="startBtn">1. ARM APP (ACTIVATE SENSORS)</button>
+        <br>
+        <select id="soundSelect">
+            <option value="doh">Homer Simpson ("D'oh!")</option>
+            <option value="scream">Classic Human Scream</option>
+        </select>
+
+        <div id="statusDisplay" class="status safe">System: Disarmed</div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const soundSelect = document.getElementById('soundSelect');
+        const statusDisplay = document.getElementById('statusDisplay');
+        
+        let isArmed = false;
+        let isScreaming = false;
+
+        // Using public, reliable open-source audio URLs for immediate testing
+        const sounds = {
+            doh: new Audio('https://www.soundboard.com/handler/DownLoadTrack.ashx?cliptrackid=247209'), 
+            scream: new Audio('https://actions.google.com/sounds/v1/human/male_scream.ogg')
+        };
+
+        startBtn.addEventListener('click', async () => {
+            // iOS 13+ requires explicit permission request for device motion sensors
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permissionState = await DeviceMotionEvent.requestPermission();
+                    if (permissionState === 'granted') {
+                        initMotionTracking();
+                    } else {
+                        alert('Sensor access denied. Cannot detect drops!');
+                    }
+                } catch (error) {
+                    console.error(error);
+                }
+            } else {
+                // Non-iOS devices
+                initMotionTracking();
+            }
+        });
+
+        function initMotionTracking() {
+            if (isArmed) return;
+            isArmed = true;
+            startBtn.innerText = "🚨 APP IS LIVE & ARMED";
+            startBtn.style.background = "#ff3366";
+            startBtn.style.boxShadow = "0 4px 15px rgba(255, 51, 102, 0.4)";
+            statusDisplay.innerText = "System: Monitoring Gravity";
+
+            window.addEventListener('devicemotion', (event) => {
+                let acc = event.accelerationIncludingGravity;
+                if (!acc) return;
+
+                // Calculate total G-forces acting on the phone
+                let gForce = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z) / 9.8;
+
+                // In true free-fall (a drop), total net forces drop close to zero.
+                if (gForce < 0.3 && !isScreaming) {
+                    triggerSound();
+                } 
+                // Once it hits the couch/mattress, G-forces spike back up, stopping the sound
+                else if (gForce > 0.8 && isScreaming) {
+                    stopSound();
+                }
+            });
+        }
+
+        function triggerSound() {
+            isScreaming = true;
+            statusDisplay.innerText = "🔥 FREE FALL DETECTED!!!";
+            statusDisplay.className = "status falling";
+            
+            let selectedSound = soundSelect.value;
+            sounds[selectedSound].currentTime = 0;
+            sounds[selectedSound].play().catch(e => console.log("Audio play blocked until user interacts"));
+        }
+
+        function stopSound() {
+            isScreaming = false;
+            statusDisplay.innerText = "💥 IMPACT DETECTED / SAFE";
+            statusDisplay.className = "status safe";
+        }
+    </script>
+</body>
+</html>
